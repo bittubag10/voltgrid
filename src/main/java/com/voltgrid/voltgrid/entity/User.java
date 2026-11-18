@@ -2,6 +2,7 @@ package com.voltgrid.voltgrid.entity;
 
 
 import com.voltgrid.voltgrid.common.entity.BaseEntity;
+import com.voltgrid.voltgrid.enums.Role;
 import jakarta.persistence.*;
 import lombok.*;
 

@@ -1,4 +1,7 @@
 package com.voltgrid.voltgrid.charger.entity;
 
-public class ChargerStatus {
+public enum ChargerStatus {
+    AVAILABLE,
+    OCCUPIED,
+    OUT_OF_SERVICE
 }

@@ -2,7 +2,7 @@ package com.voltgrid.voltgrid.dto;
 
 
 
-import com.voltgrid.voltgrid.entity.Role;
+import com.voltgrid.voltgrid.enums.Role;
 import com.voltgrid.voltgrid.entity.User;
 
 import java.time.Instant;

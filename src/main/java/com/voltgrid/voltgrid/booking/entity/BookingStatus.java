@@ -1,4 +1,10 @@
 package com.voltgrid.voltgrid.booking.entity;
 
-public class BookingStatus {
+public enum BookingStatus {
+    PENDING_PAYMENT,
+    CONFIRMED,
+    ACTIVE,
+    COMPLETED,
+    CANCELLED,
+    EXPIRED
 }

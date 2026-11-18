@@ -1,4 +1,6 @@
 package com.voltgrid.voltgrid.station.entity;
 
-public class StationStatus {
+public enum StationStatus {
+    ACTIVE,
+    INACTIVE
 }

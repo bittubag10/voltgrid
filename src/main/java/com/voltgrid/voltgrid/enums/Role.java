@@ -1,4 +1,4 @@
-package com.voltgrid.voltgrid.entity;
+package com.voltgrid.voltgrid.enums;
 
 public enum Role {
     DRIVER,

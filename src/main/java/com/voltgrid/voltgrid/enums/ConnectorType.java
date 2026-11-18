@@ -1,4 +1,8 @@
 package com.voltgrid.voltgrid.enums;
 
-public class ConnectorType {
+public enum ConnectorType {
+    CCS2,
+    TYPE2,
+    CHADEMO,
+    GB_T
 }

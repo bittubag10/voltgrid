@@ -1,7 +1,7 @@
 package com.voltgrid.voltgrid.dto;
 
 
-import com.voltgrid.voltgrid.entity.Role;
+import com.voltgrid.voltgrid.enums.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

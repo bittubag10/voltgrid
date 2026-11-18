@@ -5,7 +5,7 @@ import com.voltgrid.voltgrid.dto.LoginRequest;
 import com.voltgrid.voltgrid.dto.LoginResponse;
 import com.voltgrid.voltgrid.dto.RegisterRequest;
 import com.voltgrid.voltgrid.dto.UserResponse;
-import com.voltgrid.voltgrid.entity.Role;
+import com.voltgrid.voltgrid.enums.Role;
 import com.voltgrid.voltgrid.entity.User;
 import com.voltgrid.voltgrid.exception.BadRequestException;
 import com.voltgrid.voltgrid.exception.ConflictException;

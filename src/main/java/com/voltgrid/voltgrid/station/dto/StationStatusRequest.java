@@ -1,4 +1,9 @@
 package com.voltgrid.voltgrid.station.dto;
 
-public class StationStatusRequest {
+import com.voltgrid.voltgrid.station.entity.StationStatus;
+import jakarta.validation.constraints.NotNull;
+
+public record StationStatusRequest(
+        @NotNull StationStatus status
+) {
 }
