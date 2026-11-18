@@ -5,6 +5,7 @@ import com.voltgrid.voltgrid.booking.dto.BookingResponse;
 import com.voltgrid.voltgrid.booking.entity.BookingStatus;
 import com.voltgrid.voltgrid.booking.service.BookingService;
 import com.voltgrid.voltgrid.dto.PageResponse;
+import com.voltgrid.voltgrid.payment.service.PaymentService;
 import com.voltgrid.voltgrid.security.AuthenticatedUser;
 import com.voltgrid.voltgrid.util.Pagination;
 import jakarta.validation.Valid;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 public class BookingController {
 
     private final BookingService bookingService;
+    private final PaymentService paymentService;
 
     @PostMapping
     public ResponseEntity<BookingResponse> create(@AuthenticationPrincipal AuthenticatedUser user,
@@ -50,5 +52,29 @@ public class BookingController {
     public BookingResponse cancel(@AuthenticationPrincipal AuthenticatedUser user,
                                   @PathVariable Long id) {
         return bookingService.cancel(user.id(), id);
+    }
+
+    @PostMapping("/{id}/confirm-payment")
+    public BookingResponse confirmPayment(@AuthenticationPrincipal AuthenticatedUser user,
+                                          @PathVariable Long id) {
+        return paymentService.mockConfirmPayment(user.id(), id);
+    }
+
+    @PostMapping(value = {"/{id}/start", "/{id}/session/start"})
+    public BookingResponse startSession(@AuthenticationPrincipal AuthenticatedUser user,
+                                        @PathVariable Long id) {
+        return bookingService.startSession(user.id(), id);
+    }
+
+    @PostMapping(value = {"/{id}/charge-complete", "/{id}/session/charge-complete"})
+    public BookingResponse completeCharging(@AuthenticationPrincipal AuthenticatedUser user,
+                                            @PathVariable Long id) {
+        return bookingService.completeCharging(user.id(), id);
+    }
+
+    @PostMapping(value = {"/{id}/plug-out", "/{id}/session/plug-out"})
+    public BookingResponse plugOut(@AuthenticationPrincipal AuthenticatedUser user,
+                                   @PathVariable Long id) {
+        return bookingService.plugOut(user.id(), id);
     }
 }

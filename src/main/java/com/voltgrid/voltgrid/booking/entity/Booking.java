@@ -7,6 +7,7 @@ import com.voltgrid.voltgrid.vehicle.entity.Vehicle;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -54,6 +55,30 @@ public class Booking extends BaseEntity {
     // Only meaningful while PENDING_PAYMENT: the slot is held until this moment
     @Column(name = "expires_at")
     private Instant expiresAt;
+
+    @Builder.Default
+    @Column(name = "base_amount", precision = 8, scale = 2)
+    private BigDecimal baseAmount = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "overstay_penalty", precision = 8, scale = 2)
+    private BigDecimal overstayPenalty = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "total_amount", precision = 8, scale = 2)
+    private BigDecimal totalAmount = BigDecimal.ZERO;
+
+    @Column(name = "session_start_time")
+    private Instant sessionStartTime;
+
+    @Column(name = "charge_completed_at")
+    private Instant chargeCompletedAt;
+
+    @Column(name = "plug_out_at")
+    private Instant plugOutAt;
+
+    @Column(name = "payment_intent_id", length = 150)
+    private String paymentIntentId;
 
     // Guards concurrent updates of the SAME booking row (it does not stop two INSERTs for one slot)
     @Version

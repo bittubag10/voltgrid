@@ -25,6 +25,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,6 +43,7 @@ public class BookingService {
     private final VehicleRepository vehicleRepository;
     private final ChargerRepository chargerRepository;
     private final UserRepository userRepository;
+    private final OverstayService overstayService;
     private final Clock clock;
 
     @Value("${app.booking.payment-hold-minutes:5}")
@@ -92,6 +95,11 @@ public class BookingService {
             throw new ConflictException("Your vehicle already has a booking in this time slot");
         }
 
+        long durationMinutes = Duration.between(start, end).toMinutes();
+        BigDecimal hours = BigDecimal.valueOf(durationMinutes).divide(BigDecimal.valueOf(60), 4, RoundingMode.HALF_UP);
+        BigDecimal estimatedKwh = charger.getPowerKw().multiply(hours);
+        BigDecimal baseAmount = estimatedKwh.multiply(charger.getPricePerKwh()).setScale(2, RoundingMode.HALF_UP);
+
         Booking booking = Booking.builder()
                 .driver(driver)
                 .vehicle(vehicle)
@@ -100,6 +108,9 @@ public class BookingService {
                 .endTime(end)
                 .status(BookingStatus.PENDING_PAYMENT)
                 .expiresAt(now.plus(Duration.ofMinutes(paymentHoldMinutes)))
+                .baseAmount(baseAmount)
+                .overstayPenalty(BigDecimal.ZERO)
+                .totalAmount(baseAmount)
                 .build();
 
         return BookingResponse.from(bookingRepository.save(booking), now);
@@ -143,7 +154,68 @@ public class BookingService {
         return bookingRepository.expirePendingBookings(clock.instant());
     }
 
-    private Booking findOwned(Long driverId, Long bookingId) {
+    @Transactional
+    public BookingResponse startSession(Long driverId, Long bookingId) {
+        Instant now = clock.instant();
+        Booking booking = findOwned(driverId, bookingId);
+
+        if (booking.getStatus() != BookingStatus.CONFIRMED) {
+            throw new ConflictException("Booking must be CONFIRMED to start charging session (current status: "
+                    + booking.getStatus() + ")");
+        }
+
+        booking.setStatus(BookingStatus.ACTIVE);
+        booking.setSessionStartTime(now);
+        booking.getCharger().setStatus(ChargerStatus.OCCUPIED);
+
+        return BookingResponse.from(booking, now);
+    }
+
+    @Transactional
+    public BookingResponse completeCharging(Long driverId, Long bookingId) {
+        Instant now = clock.instant();
+        Booking booking = findOwned(driverId, bookingId);
+
+        if (booking.getStatus() != BookingStatus.ACTIVE) {
+            throw new ConflictException("Booking must be ACTIVE to mark charging complete (current status: "
+                    + booking.getStatus() + ")");
+        }
+
+        if (booking.getChargeCompletedAt() == null) {
+            booking.setChargeCompletedAt(now);
+        }
+
+        // Car remains plugged in, charger remains OCCUPIED, booking remains ACTIVE
+        return BookingResponse.from(booking, now);
+    }
+
+    @Transactional
+    public BookingResponse plugOut(Long driverId, Long bookingId) {
+        Instant now = clock.instant();
+        Booking booking = findOwned(driverId, bookingId);
+
+        if (booking.getStatus() != BookingStatus.ACTIVE) {
+            throw new ConflictException("Booking must be ACTIVE to plug out (current status: "
+                    + booking.getStatus() + ")");
+        }
+
+        booking.setPlugOutAt(now);
+        if (booking.getChargeCompletedAt() == null) {
+            booking.setChargeCompletedAt(now);
+        }
+
+        BigDecimal penalty = overstayService.calculatePenalty(booking.getChargeCompletedAt(), now);
+        booking.setOverstayPenalty(penalty);
+        BigDecimal base = booking.getBaseAmount() != null ? booking.getBaseAmount() : BigDecimal.ZERO;
+        booking.setTotalAmount(base.add(penalty));
+
+        booking.setStatus(BookingStatus.COMPLETED);
+        booking.getCharger().setStatus(ChargerStatus.AVAILABLE);
+
+        return BookingResponse.from(booking, now);
+    }
+
+    public Booking findOwned(Long driverId, Long bookingId) {
         return bookingRepository.findByIdAndDriverId(bookingId, driverId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
     }

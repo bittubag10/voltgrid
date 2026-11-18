@@ -33,6 +33,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/ping", "/actuator/health").permitAll()
+                        .requestMatchers("/api/payments/webhook", "/api/payments/mock-confirm/**", "/api/payments/mock-confirm").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/stations", "/api/stations/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthFilter(jwtService),

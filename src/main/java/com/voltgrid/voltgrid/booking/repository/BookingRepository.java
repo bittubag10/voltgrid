@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface BookingRepository extends JpaRepository<Booking, Long> {
@@ -66,6 +67,16 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     @EntityGraph(attributePaths = {"charger", "charger.station", "vehicle"})
     Optional<Booking> findByIdAndDriverId(Long id, Long driverId);
+
+    Optional<Booking> findByPaymentIntentId(String paymentIntentId);
+
+    @Query("""
+            select b from Booking b
+            where b.status = com.voltgrid.voltgrid.booking.entity.BookingStatus.ACTIVE
+              and b.chargeCompletedAt is not null
+              and b.plugOutAt is null
+            """)
+    List<Booking> findActiveOverstayCandidates();
 
     @Modifying(clearAutomatically = true)
     @Query("""
