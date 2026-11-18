@@ -33,6 +33,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/ping", "/actuator/health").permitAll()
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
                         .requestMatchers("/api/payments/webhook", "/api/payments/mock-confirm/**", "/api/payments/mock-confirm").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/stations", "/api/stations/**").permitAll()
                         .anyRequest().authenticated())

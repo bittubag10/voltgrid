@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: voltgrid-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: voltgrid_db
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d voltgrid_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - voltgrid-network
+
+  voltgrid-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voltgrid-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/voltgrid_db
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-voltgrid-production-secret-key-change-me-0123456789}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@voltgrid.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-AdminSecurePassword123!}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      APP_PAYMENT_MOCK_ENABLED: ${APP_PAYMENT_MOCK_ENABLED:-true}
+    ports:
+      - "8080:8080"
+    networks:
+      - voltgrid-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  voltgrid-network:
+    driver: bridge
