@@ -48,18 +48,23 @@ public class AdminSeeder implements ApplicationRunner {
         }
 
         String email = adminEmail.trim().toLowerCase();
-        if (userRepository.existsByEmail(email)) {
-            log.info("Admin seed skipped: user already exists");
-            return;
-        }
-
-        userRepository.save(User.builder()
-                .name(adminName)
-                .email(email)
-                .passwordHash(passwordEncoder.encode(adminPassword))
-                .role(Role.ADMIN)
-                .build());
-
-        log.info("Admin account created for {}", email);
+        userRepository.findByEmail(email).ifPresentOrElse(
+                user -> {
+                    user.setPasswordHash(passwordEncoder.encode(adminPassword));
+                    user.setRole(Role.ADMIN);
+                    user.setName(adminName);
+                    userRepository.save(user);
+                    log.info("Admin account updated and synced for {}", email);
+                },
+                () -> {
+                    userRepository.save(User.builder()
+                            .name(adminName)
+                            .email(email)
+                            .passwordHash(passwordEncoder.encode(adminPassword))
+                            .role(Role.ADMIN)
+                            .build());
+                    log.info("Admin account created for {}", email);
+                }
+        );
     }
 }

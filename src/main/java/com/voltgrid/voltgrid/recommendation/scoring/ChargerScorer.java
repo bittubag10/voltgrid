@@ -58,8 +58,19 @@ public final class ChargerScorer {
             ConnectorType connectorType,
             double powerKw,
             double straightLineDistanceKm,
-            int queuedVehicles
+            int queuedVehicles,
+            double dynamicWaitMinutes
     ) {
+        public ChargerOption(
+                Long chargerId,
+                ConnectorType connectorType,
+                double powerKw,
+                double straightLineDistanceKm,
+                int queuedVehicles
+        ) {
+            this(chargerId, connectorType, powerKw, straightLineDistanceKm, queuedVehicles, queuedVehicles * MINUTES_PER_QUEUED_VEHICLE);
+        }
+
         public ChargerOption {
             Objects.requireNonNull(chargerId, "chargerId");
             Objects.requireNonNull(connectorType, "connectorType");
@@ -69,6 +80,9 @@ public final class ChargerScorer {
             }
             if (queuedVehicles < 0) {
                 throw new IllegalArgumentException("queuedVehicles cannot be negative");
+            }
+            if (!Double.isFinite(dynamicWaitMinutes) || dynamicWaitMinutes < 0) {
+                throw new IllegalArgumentException("dynamicWaitMinutes cannot be negative");
             }
         }
     }
@@ -118,7 +132,7 @@ public final class ChargerScorer {
 
         double chargeMinutes = energyToChargeKwh / (effectivePowerKw * CHARGING_EFFICIENCY) * 60.0;
         double driveMinutes = roadKm / AVERAGE_SPEED_KMPH * 60.0;
-        double waitMinutes = charger.queuedVehicles() * MINUTES_PER_QUEUED_VEHICLE;
+        double waitMinutes = charger.dynamicWaitMinutes();
 
         return new Score(
                 charger.chargerId(),

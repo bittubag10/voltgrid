@@ -17,6 +17,8 @@ public interface StationRepository extends JpaRepository<Station, Long> {
     // Owner side (ownership check is part of the query)
     Page<Station> findByOwnerId(Long ownerId, Pageable pageable);
 
+    List<Station> findByOwnerIdOrderByIdAsc(Long ownerId);
+
     Optional<Station> findByIdAndOwnerId(Long id, Long ownerId);
 
     long countByOwnerId(Long ownerId);
@@ -27,6 +29,10 @@ public interface StationRepository extends JpaRepository<Station, Long> {
     Page<Station> findByStatusAndCityIgnoreCase(StationStatus status, String city, Pageable pageable);
 
     Optional<Station> findByIdAndStatus(Long id, StationStatus status);
+
+    boolean existsByName(String name);
+
+    List<Station> findByStatus(StationStatus status);
     @Query("""
             select s from Station s
             where s.status = :status

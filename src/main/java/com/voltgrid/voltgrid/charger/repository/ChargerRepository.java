@@ -36,6 +36,7 @@ public interface ChargerRepository extends JpaRepository<Charger, Long> {
     boolean existsByStationIdAndNameIgnoreCase(Long stationId, String name);
 
     boolean existsByStationIdAndNameIgnoreCaseAndIdNot(Long stationId, String name, Long id);
+    List<Charger> findByStationIdIn(Collection<Long> stationIds);
     List<Charger> findByStationIdInAndStatusNot(Collection<Long> stationIds, ChargerStatus status);
 
     @Query("""
@@ -47,6 +48,8 @@ public interface ChargerRepository extends JpaRepository<Charger, Long> {
     Optional<Charger> findBookable(@Param("id") Long id,
                                    @Param("stationStatus") StationStatus stationStatus,
                                    @Param("outOfService") ChargerStatus outOfService);
+
+    long countByStatus(ChargerStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints({@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000")})

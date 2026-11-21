@@ -36,6 +36,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -77,6 +78,9 @@ public class PaymentAndSessionLifecycleTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private Clock clock;
 
     private User driver;
     private User owner;
@@ -303,7 +307,7 @@ public class PaymentAndSessionLifecycleTest {
 
         // Simulate charging completed 25 minutes ago
         Booking activeBooking = bookingRepository.findById(booking.getId()).orElseThrow();
-        activeBooking.setChargeCompletedAt(Instant.now().minus(Duration.ofMinutes(25)));
+        activeBooking.setChargeCompletedAt(clock.instant().minus(Duration.ofMinutes(25).plusSeconds(2)));
         bookingRepository.save(activeBooking);
 
         // Run accrual job

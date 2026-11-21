@@ -77,4 +77,12 @@ public class BookingController {
                                    @PathVariable Long id) {
         return bookingService.plugOut(user.id(), id);
     }
+
+    @PostMapping("/{id}/simulate-overstay")
+    public BookingResponse simulateOverstay(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "18") int minutes) {
+        return bookingService.simulateOverstay(user.id(), id, minutes);
+    }
 }

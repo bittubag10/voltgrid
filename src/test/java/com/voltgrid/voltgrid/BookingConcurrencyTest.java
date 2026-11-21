@@ -289,4 +289,54 @@ public class BookingConcurrencyTest {
         reloadedExpired = bookingRepository.findById(expiredBooking.getId()).orElseThrow();
         assertThat(reloadedExpired.getStatus()).isEqualTo(BookingStatus.EXPIRED);
     }
+
+    @Test
+    @DisplayName("Flyway V2: Database exclusion constraint hard-blocks overlapping active bookings at PostgreSQL level")
+    void testDatabaseExclusionConstraintPreventsOverlappingBookings() {
+        Instant now = Instant.now().plus(Duration.ofDays(3)).truncatedTo(ChronoUnit.HOURS);
+        Instant slotStart = now;
+        Instant slotEnd = slotStart.plus(Duration.ofMinutes(45));
+
+        // 1. Save an active holding booking directly in PostgreSQL
+        Booking firstBooking = bookingRepository.saveAndFlush(Booking.builder()
+                .driver(drivers.get(0))
+                .vehicle(vehicles.get(0))
+                .charger(charger)
+                .startTime(slotStart)
+                .endTime(slotEnd)
+                .status(BookingStatus.CONFIRMED)
+                .build());
+        assertThat(firstBooking.getId()).isNotNull();
+
+        // 2. Attempt to save an overlapping active booking directly via repository
+        // (bypassing service layer locks to test PostgreSQL EXCLUDE USING gist constraint)
+        Instant overlapStart = slotStart.plus(Duration.ofMinutes(15));
+        Instant overlapEnd = overlapStart.plus(Duration.ofMinutes(45));
+
+        Booking conflictingBooking = Booking.builder()
+                .driver(drivers.get(1))
+                .vehicle(vehicles.get(1))
+                .charger(charger)
+                .startTime(overlapStart)
+                .endTime(overlapEnd)
+                .status(BookingStatus.PENDING_PAYMENT)
+                .build();
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.dao.DataIntegrityViolationException.class,
+                () -> bookingRepository.saveAndFlush(conflictingBooking),
+                "PostgreSQL exclusion constraint must reject overlapping active booking"
+        );
+
+        // 3. Verify that non-active statuses (e.g. CANCELLED) can overlap without constraint violation
+        Booking cancelledBooking = bookingRepository.saveAndFlush(Booking.builder()
+                .driver(drivers.get(1))
+                .vehicle(vehicles.get(1))
+                .charger(charger)
+                .startTime(overlapStart)
+                .endTime(overlapEnd)
+                .status(BookingStatus.CANCELLED)
+                .build());
+        assertThat(cancelledBooking.getId()).isNotNull();
+    }
 }

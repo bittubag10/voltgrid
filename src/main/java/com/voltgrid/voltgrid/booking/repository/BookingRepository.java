@@ -78,6 +78,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             """)
     List<Booking> findActiveOverstayCandidates();
 
+    long countByStatus(BookingStatus status);
+
+    @EntityGraph(attributePaths = {"charger", "charger.station", "vehicle"})
+    List<Booking> findTop50ByOrderByStartTimeDesc();
+
     @Modifying(clearAutomatically = true)
     @Query("""
             update Booking b
@@ -86,4 +91,22 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
               and b.expiresAt <= :now
             """)
     int expirePendingBookings(@Param("now") Instant now);
+
+    @Query("""
+            select b from Booking b
+            where b.charger.id in :chargerIds
+              and b.status in (com.voltgrid.voltgrid.booking.entity.BookingStatus.ACTIVE, com.voltgrid.voltgrid.booking.entity.BookingStatus.CONFIRMED)
+              and b.endTime > :now
+            order by b.startTime asc
+            """)
+    List<Booking> findRelevantBookingsForWaitTime(@Param("chargerIds") Collection<Long> chargerIds,
+                                                 @Param("now") Instant now);
+
+    @EntityGraph(attributePaths = {"charger", "charger.station", "vehicle"})
+    @Query("""
+            select b from Booking b
+            where b.charger.station.owner.id = :ownerId
+            order by b.startTime desc
+            """)
+    List<Booking> findAllByStationOwnerId(@Param("ownerId") Long ownerId);
 }

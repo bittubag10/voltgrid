@@ -215,6 +215,36 @@ public class BookingService {
         return BookingResponse.from(booking, now);
     }
 
+    @Value("${app.payment.mock-enabled:false}")
+    private boolean mockPaymentEnabled;
+
+    @Transactional
+    public BookingResponse simulateOverstay(Long driverId, Long bookingId, int minutes) {
+        if (!mockPaymentEnabled) {
+            throw new ConflictException("Simulator helpers are disabled in this environment");
+        }
+        Booking booking = (driverId != null) ? findOwned(driverId, bookingId)
+                : bookingRepository.findById(bookingId).orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+
+        if (booking.getStatus() != BookingStatus.ACTIVE && booking.getStatus() != BookingStatus.COMPLETED) {
+            throw new ConflictException("Booking must be ACTIVE or COMPLETED to simulate overstay (current status: "
+                    + booking.getStatus() + ")");
+        }
+
+        Instant now = clock.instant();
+        Instant shifted = now.minus(Duration.ofMinutes(minutes));
+        booking.setChargeCompletedAt(shifted);
+
+        Instant endCalc = (booking.getPlugOutAt() != null) ? booking.getPlugOutAt() : now;
+        BigDecimal penalty = overstayService.calculatePenalty(shifted, endCalc);
+        booking.setOverstayPenalty(penalty);
+        BigDecimal base = booking.getBaseAmount() != null ? booking.getBaseAmount() : BigDecimal.ZERO;
+        booking.setTotalAmount(base.add(penalty));
+
+        Booking saved = bookingRepository.save(booking);
+        return BookingResponse.from(saved, now);
+    }
+
     public Booking findOwned(Long driverId, Long bookingId) {
         return bookingRepository.findByIdAndDriverId(bookingId, driverId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));

@@ -11,6 +11,8 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
 
     Page<Vehicle> findByDriverIdAndActiveTrue(Long driverId, Pageable pageable);
 
+    java.util.List<Vehicle> findByDriverIdAndActiveTrue(Long driverId);
+
     Optional<Vehicle> findByIdAndDriverIdAndActiveTrue(Long id, Long driverId);
 
     long countByDriverIdAndActiveTrue(Long driverId);

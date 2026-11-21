@@ -1,5 +1,8 @@
 package com.voltgrid.voltgrid.recommendation.service;
 
+import com.voltgrid.voltgrid.booking.entity.Booking;
+import com.voltgrid.voltgrid.booking.entity.BookingStatus;
+import com.voltgrid.voltgrid.booking.repository.BookingRepository;
 import com.voltgrid.voltgrid.charger.entity.Charger;
 import com.voltgrid.voltgrid.charger.entity.ChargerStatus;
 import com.voltgrid.voltgrid.charger.repository.ChargerRepository;
@@ -27,11 +30,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @Service
@@ -42,17 +50,18 @@ public class RecommendationService {
     private static final double DEFAULT_TARGET_PERCENT = 80.0;
     private static final int DEFAULT_TOP_K = 3;
 
-    // Placeholder: Step 15 (bookings) will replace this with the real queue at each charger
-    private static final int QUEUED_VEHICLES_PLACEHOLDER = 0;
-
     private static final String MSG_OK = "Chargers ranked by total time (drive + wait + charge)";
     private static final String MSG_NO_CHARGER = "No available charger found within your reachable range";
 
     private final VehicleRepository vehicleRepository;
     private final StationRepository stationRepository;
     private final ChargerRepository chargerRepository;
+    private final BookingRepository bookingRepository;
 
     private record StationDistance(Station station, double distanceKm) {
+    }
+
+    public record WaitTimeInfo(double waitMinutes, int queuedVehicles) {
     }
 
     @Transactional(readOnly = true)
@@ -109,7 +118,7 @@ public class RecommendationService {
             return response(vehicle, rangeKm, searchRadiusKm, 0, 0, List.of(), MSG_NO_CHARGER);
         }
 
-        // Step 12: score every charger
+        // Step 12: score every charger with real dynamic queue wait times
         DriverState driverState = new DriverState(
                 vehicle.getConnectorType(),
                 vehicle.getMaxChargeKw().doubleValue(),
@@ -119,17 +128,33 @@ public class RecommendationService {
                 range.effectiveConsumptionKwhPerKm(),
                 rangeKm);
 
+        Instant now = Instant.now();
+        List<Long> chargerIds = chargers.stream().map(Charger::getId).toList();
+        List<Booking> activeAndConfirmedBookings = bookingRepository.findRelevantBookingsForWaitTime(chargerIds, now);
+        Map<Long, List<Booking>> bookingsByCharger = activeAndConfirmedBookings.stream()
+                .collect(Collectors.groupingBy(b -> b.getCharger().getId()));
+
         Map<Long, Charger> chargerById = new HashMap<>();
         List<Score> eligible = new ArrayList<>();
         int incompatible = 0;
 
         for (Charger charger : chargers) {
+            double straightDist = distanceByStation.get(charger.getStation().getId());
+            double roadDist = straightDist * ChargerScorer.ROAD_DISTANCE_FACTOR;
+            double driveMinutes = (roadDist / speedKmph) * 60.0;
+            Instant arrivalInstant = now.plusSeconds((long) (driveMinutes * 60.0));
+
+            List<Booking> chargerBookings = bookingsByCharger.getOrDefault(charger.getId(), List.of());
+            WaitTimeInfo waitInfo = calculateWaitTime(chargerBookings, now, arrivalInstant);
+
             ChargerOption option = new ChargerOption(
                     charger.getId(),
                     charger.getConnectorType(),
                     charger.getPowerKw().doubleValue(),
-                    distanceByStation.get(charger.getStation().getId()),
-                    QUEUED_VEHICLES_PLACEHOLDER);
+                    straightDist,
+                    waitInfo.queuedVehicles(),
+                    waitInfo.waitMinutes()
+            );
 
             Score score = ChargerScorer.score(driverState, option);
 
@@ -226,6 +251,62 @@ public class RecommendationService {
                 message,
                 recommendations
         );
+    }
+
+    private WaitTimeInfo calculateWaitTime(List<Booking> bookings, Instant now, Instant arrivalInstant) {
+        if (bookings == null || bookings.isEmpty()) {
+            return new WaitTimeInfo(0.0, 0);
+        }
+
+        Instant busyUntil = now;
+        int queuedCount = 0;
+
+        // Check for any currently ACTIVE session on this charger
+        Optional<Booking> activeOpt = bookings.stream()
+                .filter(b -> b.getStatus() == BookingStatus.ACTIVE)
+                .findFirst();
+
+        if (activeOpt.isPresent()) {
+            Booking active = activeOpt.get();
+            if (active.getChargeCompletedAt() != null) {
+                // Charging has completed, vehicle is in grace period or pending plug-out
+                Instant graceEnd = active.getChargeCompletedAt().plusSeconds(300);
+                busyUntil = graceEnd.isAfter(now) ? graceEnd : now;
+            } else {
+                // Charging active, busy until scheduled slot end
+                busyUntil = active.getEndTime().isAfter(now) ? active.getEndTime() : now;
+            }
+            if (busyUntil.isAfter(arrivalInstant)) {
+                queuedCount++;
+            }
+        }
+
+        // Check CONFIRMED bookings starting within driver arrival window or chained back-to-back
+        List<Booking> confirmed = bookings.stream()
+                .filter(b -> b.getStatus() == BookingStatus.CONFIRMED)
+                .sorted(Comparator.comparing(Booking::getStartTime))
+                .toList();
+
+        for (Booking b : confirmed) {
+            Instant start = b.getStartTime();
+            Instant end = b.getEndTime();
+
+            // Extends busy block if back-to-back with previous session or starts before driver arrives
+            if (!start.isAfter(busyUntil) || start.isBefore(arrivalInstant)) {
+                busyUntil = end.isAfter(busyUntil) ? end : busyUntil;
+                if (busyUntil.isAfter(arrivalInstant)) {
+                    queuedCount++;
+                }
+            }
+        }
+
+        if (busyUntil.isAfter(arrivalInstant)) {
+            long waitSeconds = Duration.between(arrivalInstant, busyUntil).getSeconds();
+            double waitMinutes = Math.max(0.0, waitSeconds / 60.0);
+            return new WaitTimeInfo(waitMinutes, Math.max(1, queuedCount));
+        }
+
+        return new WaitTimeInfo(0.0, 0);
     }
 
     private static double round(double value, int decimals) {
